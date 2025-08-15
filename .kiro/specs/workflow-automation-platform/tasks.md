@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [-] 1. Extend database schema and setup core models
+- [ ] 1. Extend database schema and setup core models
   - Update Prisma schema with Workflow, Execution, and RefreshToken models
   - Generate Prisma client and run migrations
   - Create database seed script with sample data
