@@ -13,3 +13,79 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflows     Workflow[]
+  executions    Execution[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Workflow {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  definition  Json
+  status      WorkflowStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions Execution[]
+
+  @@map("workflows")
+}
+
+model Execution {
+  id             String          @id @default(cuid())
+  status         ExecutionStatus @default(PENDING)
+  startedAt      DateTime        @default(now())
+  finishedAt     DateTime?
+  inputData      Json?
+  outputData     Json?
+  errorMessage   String?
+  n8nExecutionId String?
+
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("executions")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
