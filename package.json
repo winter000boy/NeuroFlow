@@ -10,7 +10,8 @@
     "lint": "eslint 'src/**/*.{ts,js}' --fix",
     "format": "prettier --write 'src/**/*.{ts,js,json,md}'",
     "test": "jest --detectOpenHandles --forceExit",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "db:seed": "ts-node prisma/seed.ts"
   },
   "keywords": ["node", "express", "prisma", "n8n", "automation", "backend"],
   "author": "",
@@ -53,5 +54,8 @@
   },
   "lint-staged": {
     "src/**/*.{ts,js,json,md}": ["eslint --fix", "prettier --write"]
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

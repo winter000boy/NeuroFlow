@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { executionService } from '../services/execution.service';
+import * as executionService from '../services/execution.service';
 
 export const triggerExecution = async (req: Request, res: Response, next: NextFunction) => {
   try {

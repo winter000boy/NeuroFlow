@@ -1,12 +1,16 @@
 import jwt from 'jsonwebtoken';
 import { AUTH_CONFIG } from '../config';
 
-export const generateAccessToken = (userId: number): string => {
-  return jwt.sign({ userId }, AUTH_CONFIG.jwtSecret, { expiresIn: AUTH_CONFIG.jwtExpiresIn });
+export const generateAccessToken = (userId: string): string => {
+  return jwt.sign({ userId }, AUTH_CONFIG.jwtSecret, { 
+    expiresIn: AUTH_CONFIG.jwtExpiresIn 
+  } as jwt.SignOptions);
 };
 
-export const generateRefreshToken = (userId: number): string => {
-  return jwt.sign({ userId }, AUTH_CONFIG.jwtSecret, { expiresIn: AUTH_CONFIG.refreshTokenExpiresIn });
+export const generateRefreshToken = (userId: string): string => {
+  return jwt.sign({ userId }, AUTH_CONFIG.jwtSecret, { 
+    expiresIn: AUTH_CONFIG.refreshTokenExpiresIn 
+  } as jwt.SignOptions);
 };
 
 export const verifyToken = (token: string) => {
