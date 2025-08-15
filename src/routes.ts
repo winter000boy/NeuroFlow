@@ -72,8 +72,8 @@ import workflowRoutes from './routes/workflow.routes';
 router.use('/workflows', workflowRoutes);
 
 // Execution routes (protected)
-router.post('/executions', authenticate, executionController.triggerExecution);
-router.get('/executions/:id', authenticate, executionController.getExecutionStatus);
+import executionRoutes from './routes/execution.routes';
+router.use('/executions', executionRoutes);
 
 // 404 handler
 router.use(notFound);
