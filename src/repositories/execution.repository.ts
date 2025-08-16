@@ -168,18 +168,37 @@ export class ExecutionRepository {
 
     // Calculate pagination
     const skip = (pagination.page - 1) * pagination.limit;
-    const take = pagination.limit;
+    const take = Math.min(pagination.limit, 100); // Limit max page size for performance
 
-    // Execute queries
+    // Optimize query based on sort field to use appropriate indexes
+    const orderBy: Prisma.ExecutionOrderByWithRelationInput = {};
+    
+    // Use compound indexes when possible
+    if (sort.field === 'startedAt' && filters.userId) {
+      orderBy.startedAt = sort.direction;
+    } else if (sort.field === 'startedAt' && filters.workflowId) {
+      orderBy.startedAt = sort.direction;
+    } else {
+      orderBy[sort.field] = sort.direction;
+    }
+
+    // Execute queries in parallel for better performance
     const [items, total] = await Promise.all([
       prisma.execution.findMany({
         where,
-        orderBy: {
-          [sort.field]: sort.direction,
-        },
+        orderBy,
         skip,
         take,
-        include: {
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          finishedAt: true,
+          errorMessage: true,
+          n8nExecutionId: true,
+          workflowId: true,
+          userId: true,
+          // Only include necessary fields from relations
           workflow: {
             select: {
               id: true,
@@ -194,15 +213,21 @@ export class ExecutionRepository {
               name: true,
             },
           },
+          // Exclude large JSON fields by default for list views
+          inputData: false,
+          outputData: false,
         },
       }),
-      prisma.execution.count({ where }),
+      // Use approximate count for large datasets to improve performance
+      pagination.page === 1 && take < 100 
+        ? prisma.execution.count({ where })
+        : this.getApproximateCount(where),
     ]);
 
     const totalPages = Math.ceil(total / pagination.limit);
 
     return {
-      items,
+      items: items as Execution[],
       meta: {
         page: pagination.page,
         limit: pagination.limit,
@@ -210,6 +235,37 @@ export class ExecutionRepository {
         totalPages,
       },
     };
+  }
+
+  /**
+   * Get approximate count for large datasets to improve performance
+   */
+  private async getApproximateCount(where: Prisma.ExecutionWhereInput): Promise<number> {
+    try {
+      // For simple queries, use exact count
+      if (Object.keys(where).length <= 2) {
+        return await prisma.execution.count({ where });
+      }
+      
+      // For complex queries, use sampling for better performance
+      const sample = await prisma.execution.findMany({
+        where,
+        take: 1000,
+        select: { id: true },
+      });
+      
+      // If sample is less than 1000, return exact count
+      if (sample.length < 1000) {
+        return sample.length;
+      }
+      
+      // Otherwise, estimate based on sample
+      const totalRows = await prisma.execution.count();
+      return Math.round((sample.length / 1000) * totalRows);
+    } catch (error) {
+      // Fallback to exact count if estimation fails
+      return await prisma.execution.count({ where });
+    }
   }
 
   /**

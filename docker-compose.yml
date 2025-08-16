@@ -1,22 +1,161 @@
 version: '3.8'
 
+networks:
+  workflow-network:
+    driver: bridge
+
 services:
+  # PostgreSQL Database
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: wf_postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: wf_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: sharmaji
+      POSTGRES_DB: ${POSTGRES_DB:-wf_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sharmaji}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - workflow-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d wf_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-wf_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: wf_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - workflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    command: redis-server /usr/local/etc/redis/redis.conf
+
+  # n8n Workflow Engine
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: wf_n8n
+    restart: unless-stopped
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-admin}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${TZ:-UTC}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB:-n8n}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-sharmaji}
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/.n8n/workflows:ro
+    networks:
+      - workflow-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Backend API Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: wf_backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=${BACKEND_PORT:-3001}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-sharmaji}@postgres:5432/${POSTGRES_DB:-wf_db}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-your-super-secret-refresh-key}
+      - N8N_API_URL=http://n8n:5678
+      - N8N_API_KEY=${N8N_API_KEY:-}
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - backend_logs:/app/logs
+    networks:
+      - workflow-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Frontend React Application
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: wf_frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:${BACKEND_PORT:-3001}/api
+      - REACT_APP_WS_URL=http://localhost:${BACKEND_PORT:-3001}
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    networks:
+      - workflow-network
+    depends_on:
+      - backend
+    stdin_open: true
+    tty: true
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  n8n_data:
+    driver: local
+  backend_logs:
+    driver: local

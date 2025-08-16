@@ -1,0 +1,100 @@
+# Multi-stage Production Dockerfile for Backend
+FROM node:18-alpine AS base
+
+# Install system dependencies
+RUN apk add --no-cache \
+    curl \
+    git \
+    python3 \
+    make \
+    g++ \
+    dumb-init \
+    && rm -rf /var/cache/apk/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Dependencies stage
+FROM base AS dependencies
+
+# Install all dependencies
+RUN npm ci --include=dev --frozen-lockfile
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build stage
+FROM dependencies AS build
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Remove dev dependencies
+RUN npm prune --production
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    curl \
+    dumb-init \
+    tini \
+    && rm -rf /var/cache/apk/*
+
+# Create app user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application
+COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=build --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=build --chown=nodejs:nodejs /app/package*.json ./
+COPY --from=build --chown=nodejs:nodejs /app/prisma ./prisma
+COPY --from=build --chown=nodejs:nodejs /app/generated ./generated
+
+# Copy production configuration
+COPY --chown=nodejs:nodejs scripts/docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=nodejs:nodejs scripts/wait-for-it.sh ./wait-for-it.sh
+
+# Make scripts executable
+RUN chmod +x docker-entrypoint.sh wait-for-it.sh
+
+# Create necessary directories with proper permissions
+RUN mkdir -p logs uploads tmp backups && \
+    chown -R nodejs:nodejs logs uploads tmp backups
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3001
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/api/health/live || exit 1
+
+# Use tini as PID 1 to handle signals properly
+ENTRYPOINT ["tini", "--"]
+
+# Start production server
+CMD ["./docker-entrypoint.sh"]
+
+# Labels for metadata
+LABEL maintainer="Workflow Platform Team"
+LABEL version="1.0.0"
+LABEL description="Workflow Automation Platform Backend"

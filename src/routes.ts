@@ -3,7 +3,7 @@ import { authController, userController, workflowController, executionController
 import { authenticate } from './middleware/auth.middleware';
 import { notFound } from './middleware/notFound.middleware';
 import { errorHandler } from './middleware/error.middleware';
-import { httpLogger } from './middleware/logger.middleware';
+import { httpLogger, apiLogger } from './middleware/logger.middleware';
 import { validate } from './middleware/validate.middleware';
 
 // Example: Zod validation schemas
@@ -47,8 +47,14 @@ const router = Router();
 // Apply request logger to all routes
 router.use(httpLogger);
 
-// Health check
-router.get('/health', healthController.healthCheck);
+// Apply detailed API logging for monitoring
+if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_API_LOGGING === 'true') {
+  router.use(apiLogger);
+}
+
+// Health routes
+import healthRoutes from './routes/health.routes';
+router.use('/health', healthRoutes);
 
 // Auth routes
 router.post('/auth/register', validate(registerSchema), authController.register);

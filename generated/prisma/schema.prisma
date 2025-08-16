@@ -26,6 +26,8 @@ model User {
   executions    Execution[]
   refreshTokens RefreshToken[]
 
+  @@index([email])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -42,6 +44,12 @@ model Workflow {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   executions Execution[]
 
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([userId, status])
+  @@index([userId, createdAt])
   @@map("workflows")
 }
 
@@ -61,6 +69,17 @@ model Execution {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([workflowId])
+  @@index([status])
+  @@index([startedAt])
+  @@index([finishedAt])
+  @@index([n8nExecutionId])
+  @@index([userId, status])
+  @@index([workflowId, status])
+  @@index([userId, startedAt])
+  @@index([workflowId, startedAt])
+  @@index([status, startedAt])
   @@map("executions")
 }
 
@@ -73,6 +92,9 @@ model RefreshToken {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([token])
   @@map("refresh_tokens")
 }
 
