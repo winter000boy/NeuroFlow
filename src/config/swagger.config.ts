@@ -1,5 +1,4 @@
 import swaggerJsdoc from 'swagger-jsdoc';
-import { Request, Response } from 'express';
 
 export const SWAGGER_OPTIONS: swaggerJsdoc.Options = {
   definition: {

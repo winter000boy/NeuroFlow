@@ -1,3 +1,6 @@
+/// <reference types="cypress" />
+/// <reference path="../support/index.d.ts" />
+
 describe('Execution Monitoring', () => {
   const testUser = {
     name: 'Test User',

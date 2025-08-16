@@ -27,8 +27,24 @@ interface AnalyticsData {
   totalExecutions: number;
   successRate: number;
   averageExecutionTime: number;
-  recentExecutions: any[];
-  statusDistribution: Record<string, number>;
+  executionsByStatus: Record<string, number>;
+  executionTrends: Array<{
+    date: string;
+    count: number;
+    successCount: number;
+    failureCount: number;
+  }>;
+  topFailingWorkflows: Array<{
+    workflowId: string;
+    workflowName: string;
+    failureCount: number;
+    failureRate: number;
+  }>;
+  performanceMetrics: {
+    fastestExecution: number;
+    slowestExecution: number;
+    medianExecutionTime: number;
+  };
 }
 
 const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) => {
@@ -45,7 +61,7 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
     try {
       setLoading(true);
       setError(null);
-      const data = await executionService.getExecutionAnalytics(workflowId);
+      const data = await executionService.getExecutionAnalytics({ workflowId });
       setAnalytics(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
@@ -78,9 +94,9 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
   };
 
   const prepareStatusDistributionData = () => {
-    if (!analytics?.statusDistribution) return [];
-    
-    return Object.entries(analytics.statusDistribution).map(([status, count]) => ({
+    if (!analytics?.executionsByStatus) return [];
+
+    return Object.entries(analytics.executionsByStatus).map(([status, count]) => ({
       name: status.charAt(0).toUpperCase() + status.slice(1),
       value: count,
       color: getStatusColor(status)
@@ -88,36 +104,24 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
   };
 
   const prepareTrendData = () => {
-    if (!analytics?.recentExecutions) return [];
-    
-    // Group executions by day
-    const groupedByDay = analytics.recentExecutions.reduce((acc, execution) => {
-      const date = new Date(execution.startedAt).toISOString().split('T')[0];
-      if (!acc[date]) {
-        acc[date] = { date, total: 0, success: 0, failed: 0 };
-      }
-      acc[date].total++;
-      if (execution.status === 'success') acc[date].success++;
-      if (execution.status === 'failed') acc[date].failed++;
-      return acc;
-    }, {} as Record<string, any>);
+    if (!analytics?.executionTrends) return [];
 
-    return Object.values(groupedByDay).sort((a: any, b: any) => 
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    return analytics.executionTrends.map(trend => ({
+      date: trend.date,
+      total: trend.count,
+      success: trend.successCount,
+      failed: trend.failureCount
+    }));
   };
 
   const preparePerformanceData = () => {
-    if (!analytics?.recentExecutions) return [];
-    
-    return analytics.recentExecutions
-      .filter(exec => exec.finishedAt && exec.status === 'success')
-      .map(exec => ({
-        date: new Date(exec.startedAt).toLocaleDateString(),
-        duration: new Date(exec.finishedAt).getTime() - new Date(exec.startedAt).getTime(),
-        name: `Execution ${exec.id.slice(-8)}`
-      }))
-      .slice(-20); // Last 20 successful executions
+    if (!analytics?.performanceMetrics) return [];
+
+    return [
+      { name: 'Fastest', duration: analytics.performanceMetrics.fastestExecution },
+      { name: 'Median', duration: analytics.performanceMetrics.medianExecutionTime },
+      { name: 'Slowest', duration: analytics.performanceMetrics.slowestExecution }
+    ];
   };
 
   if (loading) {
@@ -264,7 +268,7 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
                   Recent Activity
                 </dt>
                 <dd className="text-lg font-medium text-gray-900">
-                  {analytics.recentExecutions.length}
+                  {analytics.totalExecutions}
                 </dd>
               </dl>
             </div>
@@ -285,7 +289,7 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -311,12 +315,12 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
+                <XAxis
+                  dataKey="date"
                   tickFormatter={(value) => new Date(value).toLocaleDateString()}
                 />
                 <YAxis />
-                <Tooltip 
+                <Tooltip
                   labelFormatter={(value) => new Date(value).toLocaleDateString()}
                 />
                 <Legend />
@@ -364,14 +368,14 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={performanceData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
+              <XAxis
                 dataKey="date"
                 tickFormatter={(value) => value}
               />
-              <YAxis 
+              <YAxis
                 tickFormatter={(value) => formatExecutionTime(value)}
               />
-              <Tooltip 
+              <Tooltip
                 formatter={(value: number) => [formatExecutionTime(value), 'Duration']}
                 labelFormatter={(label) => `Date: ${label}`}
               />
@@ -415,30 +419,21 @@ const ExecutionAnalytics: React.FC<ExecutionAnalyticsProps> = ({ workflowId }) =
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {analytics.recentExecutions.slice(0, 10).map((execution) => (
-                <tr key={execution.id}>
+              {analytics.topFailingWorkflows.slice(0, 10).map((workflow) => (
+                <tr key={workflow.workflowId}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                    {execution.id.slice(-8)}
+                    {workflow.workflowId.slice(-8)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      execution.status === 'success' ? 'bg-green-100 text-green-800' :
-                      execution.status === 'failed' ? 'bg-red-100 text-red-800' :
-                      execution.status === 'running' ? 'bg-blue-100 text-blue-800' :
-                      execution.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {execution.status}
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                      {workflow.failureCount} failures
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(execution.startedAt).toLocaleString()}
+                    {workflow.workflowName}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {execution.finishedAt 
-                      ? formatExecutionTime(new Date(execution.finishedAt).getTime() - new Date(execution.startedAt).getTime())
-                      : 'Running...'
-                    }
+                    {(workflow.failureRate * 100).toFixed(1)}% failure rate
                   </td>
                 </tr>
               ))}

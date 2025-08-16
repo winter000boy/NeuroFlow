@@ -1,3 +1,6 @@
+/// <reference types="cypress" />
+/// <reference path="../support/index.d.ts" />
+
 describe('Authentication Flow', () => {
   const testUser = {
     name: 'Test User',

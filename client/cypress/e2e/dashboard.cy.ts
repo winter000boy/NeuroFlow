@@ -1,3 +1,6 @@
+/// <reference types="cypress" />
+/// <reference path="../support/index.d.ts" />
+
 describe('Dashboard', () => {
   const testUser = {
     name: 'Test User',

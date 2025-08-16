@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../../generated/prisma';
 import axios from 'axios';
 import { createClient } from 'redis';
 import { logger } from '../config/logger.config';

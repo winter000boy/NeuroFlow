@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../../generated/prisma';
 import { DB_CONFIG } from './index';
 
 export const prisma = new PrismaClient({

@@ -203,4 +203,60 @@ describe('authSlice', () => {
             expect(state.token).toEqual(token);
             expect(state.isAuthenticated).toBe(true);
             expect(state.isLoading).toBe(false);
-            expect
+            expect(state.error).toBeNull();
+        });
+
+        it('should handle login failure flow', () => {
+            // Start loading
+            let state = authReducer(initialState, setLoading(true));
+            expect(state.isLoading).toBe(true);
+
+            // Login failure
+            const errorMessage = 'Invalid credentials';
+            state = authReducer(state, setError(errorMessage));
+
+            expect(state.user).toBeNull();
+            expect(state.token).toBeNull();
+            expect(state.isAuthenticated).toBe(false);
+            expect(state.isLoading).toBe(false);
+            expect(state.error).toBe(errorMessage);
+        });
+
+        it('should handle logout flow', () => {
+            // Start with authenticated state
+            const authenticatedState: AuthState = {
+                user: { id: '1', email: 'test@example.com' },
+                token: 'access-token',
+                isAuthenticated: true,
+                isLoading: false,
+                error: null,
+            };
+
+            // Logout
+            const state = authReducer(authenticatedState, clearCredentials());
+
+            expect(state.user).toBeNull();
+            expect(state.token).toBeNull();
+            expect(state.isAuthenticated).toBe(false);
+            expect(state.isLoading).toBe(false);
+            expect(state.error).toBeNull();
+        });
+
+        it('should handle error recovery flow', () => {
+            // Start with error state
+            const errorState: AuthState = {
+                ...initialState,
+                error: 'Network error',
+            };
+
+            // Clear error
+            let state = authReducer(errorState, clearError());
+            expect(state.error).toBeNull();
+
+            // Start new operation
+            state = authReducer(state, setLoading(true));
+            expect(state.isLoading).toBe(true);
+            expect(state.error).toBeNull();
+        });
+    });
+});

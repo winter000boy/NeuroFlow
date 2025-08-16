@@ -198,8 +198,8 @@ const ExecutionTable: React.FC<ExecutionTableProps> = ({
             </label>
             <input
               type="date"
-              value={filters.startDate || ''}
-              onChange={(e) => handleFilterChange('startDate', e.target.value)}
+              value={filters.dateFrom || ''}
+              onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -210,8 +210,8 @@ const ExecutionTable: React.FC<ExecutionTableProps> = ({
             </label>
             <input
               type="date"
-              value={filters.endDate || ''}
-              onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              value={filters.dateTo || ''}
+              onChange={(e) => handleFilterChange('dateTo', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

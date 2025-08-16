@@ -1,0 +1,108 @@
+.
+├── app.ts
+├── config
+│   ├── db.config.ts
+│   ├── env.schema.ts
+│   ├── index.ts
+│   ├── logger.config.ts
+│   ├── n8n.config.ts
+│   └── swagger.config.ts
+├── controllers
+│   ├── auth.controller.ts
+│   ├── execution.controller.ts
+│   ├── health.controller.ts
+│   ├── index.ts
+│   ├── __tests__
+│   │   ├── health.controller.test.ts
+│   │   └── workflow.controller.test.ts
+│   ├── userController.js
+│   ├── user.controller.ts
+│   ├── webhook.controller.ts
+│   └── workflow.controller.ts
+├── index.ts
+├── middleware
+│   ├── auth.middleware.ts
+│   ├── error.middleware.ts
+│   ├── index.ts
+│   ├── logger.middleware.ts
+│   ├── monitoring.middleware.ts
+│   ├── notFound.middleware.ts
+│   ├── rateLimiter.middleware.ts
+│   ├── validate.middleware.ts
+│   └── validation.middleware.ts
+├── models
+│   └── Users.js
+├── repositories
+│   ├── execution.repository.ts
+│   ├── index.ts
+│   ├── refreshToken.repository.ts
+│   ├── user.repository.ts
+│   └── workflow.repository.ts
+├── routes
+│   ├── execution.routes.ts
+│   ├── health.routes.ts
+│   ├── userRoutes.js
+│   ├── webhook.routes.ts
+│   └── workflow.routes.ts
+├── routes.ts
+├── schemas
+│   └── workflow.schema.ts
+├── services
+│   ├── auth.service.ts
+│   ├── executionQueue.service.ts
+│   ├── execution.service.ts
+│   ├── index.ts
+│   ├── n8n.service.ts
+│   ├── __tests__
+│   │   ├── auth.service.test.ts
+│   │   ├── execution.service.test.ts
+│   │   ├── n8n.service.test.ts
+│   │   ├── user.service.test.ts
+│   │   ├── websocket.service.test.ts
+│   │   └── workflow.service.test.ts
+│   ├── user.service.ts
+│   ├── websocket.service.ts
+│   ├── workflowExecution.service.ts
+│   └── workflow.service.ts
+├── srctree.txt
+├── __tests__
+│   ├── globalSetup.ts
+│   ├── globalTeardown.ts
+│   ├── integration
+│   │   └── api.integration.test.ts
+│   ├── setup.ts
+│   └── utils
+│       └── testUtils.ts
+├── types
+│   ├── auth.types.ts
+│   ├── execution.types.ts
+│   ├── express.d.ts
+│   ├── index.ts
+│   ├── n8n.types.ts
+│   ├── user.types.ts
+│   ├── websocket.types.ts
+│   └── workflow.types.ts
+├── utils
+│   ├── asyncHandler.util.ts
+│   ├── date.util.ts
+│   ├── errors.ts
+│   ├── index.ts
+│   ├── password.util.ts
+│   ├── response.util.ts
+│   ├── __tests__
+│   │   ├── asyncHandler.test.ts
+│   │   └── errors.test.ts
+│   ├── token.util.ts
+│   └── webhook.util.ts
+└── websocket
+    ├── handlers
+    │   └── execution.handlers.ts
+    ├── middleware
+    │   ├── connectionManager.middleware.ts
+    │   └── socketAuth.middleware.ts
+    ├── socketServer.ts
+    ├── test
+    └── __tests__
+        └── socketServer.test.ts
+
+22 directories, 84 files

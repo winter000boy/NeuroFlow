@@ -15,7 +15,7 @@ interface CacheEntry<T> {
   expiresAt: number;
 }
 
-interface RequestOptions extends RequestInit {
+interface RequestOptions extends Omit<RequestInit, 'cache'> {
   cache?: boolean;
   cacheTTL?: number; // Time to live in milliseconds
 }
@@ -34,7 +34,8 @@ export class ApiService {
 
   private cleanupCache(): void {
     const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
+    const entries = Array.from(this.cache.entries());
+    for (const [key, entry] of entries) {
       if (entry.expiresAt < now) {
         this.cache.delete(key);
       }
@@ -70,7 +71,8 @@ export class ApiService {
 
   public clearCache(pattern?: string): void {
     if (pattern) {
-      for (const key of this.cache.keys()) {
+      const keys = Array.from(this.cache.keys());
+      for (const key of keys) {
         if (key.includes(pattern)) {
           this.cache.delete(key);
         }

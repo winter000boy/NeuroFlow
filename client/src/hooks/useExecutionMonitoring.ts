@@ -8,6 +8,7 @@ interface ExecutionLog {
   timestamp: string;
   level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
+  log: string; // Alias for message to maintain compatibility
 }
 
 interface ExecutionProgress {
@@ -15,6 +16,7 @@ interface ExecutionProgress {
   progress: number;
   currentStep?: string;
   message?: string;
+  status?: string;
 }
 
 interface UseExecutionMonitoringOptions {
@@ -49,6 +51,7 @@ export const useExecutionMonitoring = (options: UseExecutionMonitoringOptions = 
       timestamp: data.timestamp,
       level: data.level || 'info',
       message: data.log,
+      log: data.log, // Alias for compatibility
     };
     
     setExecutionLogs(prev => [...prev, log]);

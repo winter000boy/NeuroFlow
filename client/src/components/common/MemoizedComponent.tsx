@@ -22,7 +22,7 @@ function MemoizedComponentInner<T>({
 
 export const MemoizedComponent = memo(MemoizedComponentInner) as <T>(
   props: MemoizedComponentProps<T>
-) => JSX.Element;
+) => React.JSX.Element;
 
 // Higher-order component for memoizing expensive components
 export const withMemoization = <P extends object>(

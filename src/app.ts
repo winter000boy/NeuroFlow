@@ -11,7 +11,7 @@ import { metricsMiddleware, errorMetricsMiddleware } from './middleware/monitori
 import { logger } from './config/logger.config';
 
 const app = express();
-const connectDB = require('./config/db');
+import { prisma } from './config/db.config';
 
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
@@ -75,8 +75,7 @@ if (process.env.METRICS_ENABLED !== 'false') {
   app.use(metricsMiddleware);
 }
 
-// Connect to database
-connectDB();
+// Database connection is handled by Prisma client
 
 // API Documentation
 if (process.env.NODE_ENV !== 'production') {

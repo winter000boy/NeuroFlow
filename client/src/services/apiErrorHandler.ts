@@ -172,7 +172,7 @@ export class ApiErrorHandler {
     
     return (
       retryableCodes.includes(error.code) ||
-      (error.statusCode && retryableStatusCodes.includes(error.statusCode))
+      Boolean(error.statusCode && retryableStatusCodes.includes(error.statusCode))
     );
   }
 

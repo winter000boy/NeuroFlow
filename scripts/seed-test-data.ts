@@ -252,7 +252,7 @@ async function seedTestData() {
             outputData: status === 'SUCCESS' ? {
               result: 'Execution completed successfully',
               processedAt: finishedAt?.toISOString(),
-            } : null,
+            } : undefined,
             errorMessage: status === 'FAILED' ? 'Sample error message for testing' : null,
             n8nExecutionId: `n8n_${Math.random().toString(36).substr(2, 9)}`,
           }
