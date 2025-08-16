@@ -2,6 +2,9 @@
 
 import { ApiResponse } from '../types';
 import { authService } from './auth.service';
+import { store } from '../store';
+import { clearCredentials } from '../store/slices/authSlice';
+import { ApiErrorHandler } from './apiErrorHandler';
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
@@ -27,16 +30,28 @@ export class ApiService {
       ...options,
     };
 
-    const response = await fetch(url, config);
-    const data: ApiResponse<T> = await response.json();
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const error = new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+        (error as any).response = { status: response.status, data: errorData };
+        throw error;
+      }
 
-    if (!response.ok || !data.success) {
-      throw new Error(
-        data.error?.message || `HTTP error! status: ${response.status}`
-      );
+      const data: ApiResponse<T> = await response.json();
+
+      if (!data.success) {
+        const error = new Error(data.error?.message || 'Request failed');
+        (error as any).response = { status: response.status, data };
+        throw error;
+      }
+
+      return data.data as T;
+    } catch (error) {
+      throw ApiErrorHandler.handle(error);
     }
-
-    return data.data as T;
   }
 
   private async authenticatedRequest<T>(
@@ -75,6 +90,7 @@ export class ApiService {
         } catch (refreshError) {
           // Refresh failed, clear tokens and throw original error
           authService.clearTokens();
+          store.dispatch(clearCredentials());
           throw error;
         }
       }

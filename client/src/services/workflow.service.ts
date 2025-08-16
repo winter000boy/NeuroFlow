@@ -182,15 +182,134 @@ export class WorkflowService {
   }
 
   /**
+   * Execute workflow
+   */
+  async executeWorkflow(id: string, inputData?: any): Promise<{ executionId: string }> {
+    return apiService.postAuthenticated<{ executionId: string }>(
+      `/workflows/${id}/execute`,
+      { inputData }
+    );
+  }
+
+  /**
    * Validate workflow definition
    */
   async validateWorkflowDefinition(
     definition: any
-  ): Promise<{ valid: boolean }> {
-    return apiService.postAuthenticated<{ valid: boolean }>(
+  ): Promise<{ valid: boolean; errors?: string[] }> {
+    return apiService.postAuthenticated<{ valid: boolean; errors?: string[] }>(
       '/workflows/validate',
       { definition }
     );
+  }
+
+  /**
+   * Get workflow execution history
+   */
+  async getWorkflowExecutions(
+    id: string,
+    params: { page?: number; limit?: number; status?: string } = {}
+  ): Promise<PaginatedResult<any>> {
+    const queryParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        queryParams.append(key, value.toString());
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const endpoint = queryString 
+      ? `/workflows/${id}/executions?${queryString}` 
+      : `/workflows/${id}/executions`;
+    
+    return apiService.getAuthenticated<PaginatedResult<any>>(endpoint);
+  }
+
+  /**
+   * Get workflow analytics
+   */
+  async getWorkflowAnalytics(id: string): Promise<{
+    totalExecutions: number;
+    successRate: number;
+    averageExecutionTime: number;
+    lastExecution?: string;
+    executionTrend: Array<{ date: string; count: number }>;
+  }> {
+    return apiService.getAuthenticated(`/workflows/${id}/analytics`);
+  }
+
+  /**
+   * Export workflow definition
+   */
+  async exportWorkflow(id: string): Promise<Blob> {
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL || 'http://localhost:3000/api'}/workflows/${id}/export`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to export workflow');
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Import workflow definition
+   */
+  async importWorkflow(file: File): Promise<Workflow> {
+    const formData = new FormData();
+    formData.append('workflow', file);
+
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL || 'http://localhost:3000/api'}/workflows/import`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to import workflow');
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error?.message || 'Failed to import workflow');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Get workflow templates
+   */
+  async getWorkflowTemplates(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    definition: any;
+  }>> {
+    return apiService.get('/workflows/templates');
+  }
+
+  /**
+   * Create workflow from template
+   */
+  async createFromTemplate(templateId: string, name: string): Promise<Workflow> {
+    return apiService.postAuthenticated<Workflow>('/workflows/from-template', {
+      templateId,
+      name,
+    });
   }
 }
 
