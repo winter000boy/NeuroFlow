@@ -12,10 +12,129 @@ import {
 } from '../types/execution.types';
 import { AppError, ErrorCode } from '../utils/errors';
 import { logger } from '../config/logger.config';
+import { webSocketService } from './websocket.service';
 import axios from 'axios';
 import { N8N_CONFIG } from '../config';
 
 export class ExecutionService {
+  /**
+   * Clean up WebSocket connections for completed executions
+   */
+  private async cleanupExecutionWebSocket(executionId: string): Promise<void> {
+    try {
+      if (!webSocketService.isAvailable()) {
+        return;
+      }
+
+      // Emit final log message
+      const execution = await executionRepository.findById(executionId);
+      if (execution) {
+        webSocketService.emitExecutionLog(execution.userId, {
+          executionId,
+          timestamp: new Date(),
+          level: 'info',
+          message: 'Execution monitoring ended',
+          data: { finalStatus: execution.status }
+        });
+      }
+
+      logger.debug('WebSocket cleanup completed for execution', { executionId });
+    } catch (error) {
+      logger.error('Failed to cleanup WebSocket for execution', {
+        executionId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * Emit WebSocket events for execution status changes
+   */
+  private async emitExecutionEvent(execution: Execution, eventType: 'started' | 'progress' | 'completed' | 'failed'): Promise<void> {
+    try {
+      if (!webSocketService.isAvailable()) {
+        logger.debug('WebSocket service not available, skipping event emission');
+        return;
+      }
+
+      const workflow = await workflowRepository.findById(execution.workflowId);
+      if (!workflow) {
+        logger.warn('Workflow not found for execution event emission', { executionId: execution.id });
+        return;
+      }
+
+      const duration = execution.finishedAt && execution.startedAt 
+        ? execution.finishedAt.getTime() - execution.startedAt.getTime()
+        : 0;
+
+      switch (eventType) {
+        case 'started':
+          webSocketService.emitExecutionStarted(execution.userId, {
+            executionId: execution.id,
+            workflowId: execution.workflowId,
+            workflowName: workflow.name,
+            startedAt: execution.startedAt,
+            inputData: execution.inputData
+          });
+          break;
+
+        case 'progress':
+          webSocketService.emitExecutionProgress(execution.userId, {
+            executionId: execution.id,
+            progress: 50, // Default progress for running state
+            currentStep: 'Processing workflow...',
+            message: 'Execution in progress'
+          });
+          break;
+
+        case 'completed':
+          webSocketService.emitExecutionCompleted(execution.userId, {
+            executionId: execution.id,
+            workflowId: execution.workflowId,
+            status: execution.status,
+            finishedAt: execution.finishedAt!,
+            outputData: execution.outputData,
+            duration
+          });
+          // Cleanup WebSocket connections for completed execution
+          await this.cleanupExecutionWebSocket(execution.id);
+          break;
+
+        case 'failed':
+          webSocketService.emitExecutionFailed(execution.userId, {
+            executionId: execution.id,
+            workflowId: execution.workflowId,
+            error: execution.errorMessage || 'Execution failed',
+            finishedAt: execution.finishedAt!,
+            duration
+          });
+          // Cleanup WebSocket connections for failed execution
+          await this.cleanupExecutionWebSocket(execution.id);
+          break;
+      }
+
+      // Emit log event for status change
+      webSocketService.emitExecutionLog(execution.userId, {
+        executionId: execution.id,
+        timestamp: new Date(),
+        level: eventType === 'failed' ? 'error' : 'info',
+        message: `Execution ${eventType}`,
+        data: {
+          status: execution.status,
+          ...(execution.errorMessage && { error: execution.errorMessage }),
+          ...(execution.outputData && { outputData: execution.outputData })
+        }
+      });
+
+    } catch (error) {
+      logger.error('Failed to emit WebSocket event', {
+        executionId: execution.id,
+        eventType,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
   /**
    * Create a new execution
    */
@@ -72,8 +191,10 @@ export class ExecutionService {
         inputData,
       });
 
-      // Update status to RUNNING
-      await this.updateExecutionStatus(execution.id, ExecutionStatus.RUNNING);
+      // Update status to RUNNING and emit started event
+      const runningExecution = await this.updateExecutionStatus(execution.id, ExecutionStatus.RUNNING);
+      await this.emitExecutionEvent(runningExecution, 'started');
+      await this.emitExecutionEvent(runningExecution, 'progress');
 
       try {
         // Call n8n webhook to execute workflow
@@ -133,7 +254,7 @@ export class ExecutionService {
   }
 
   /**
-   * Update execution status with logging
+   * Update execution status with logging and WebSocket events
    */
   async updateExecutionStatus(
     executionId: string,
@@ -157,9 +278,69 @@ export class ExecutionService {
         hasOutput: !!outputData,
       });
 
+      // Emit WebSocket events based on status
+      switch (status) {
+        case ExecutionStatus.RUNNING:
+          await this.emitExecutionEvent(execution, 'progress');
+          break;
+        case ExecutionStatus.SUCCESS:
+          await this.emitExecutionEvent(execution, 'completed');
+          break;
+        case ExecutionStatus.FAILED:
+          await this.emitExecutionEvent(execution, 'failed');
+          break;
+        case ExecutionStatus.CANCELLED:
+          await this.emitExecutionEvent(execution, 'completed');
+          break;
+      }
+
       return execution;
     } catch (error) {
       logger.error('Failed to update execution status', {
+        executionId,
+        status,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update execution with result data (used by execution queue)
+   */
+  async updateExecutionWithResult(
+    executionId: string,
+    status: ExecutionStatus,
+    outputData?: any,
+    errorMessage?: string
+  ): Promise<Execution> {
+    try {
+      const updateData: UpdateExecutionDTO = {
+        status,
+        outputData,
+        errorMessage,
+        finishedAt: new Date(),
+      };
+
+      const execution = await executionRepository.update(executionId, updateData);
+
+      logger.info('Execution updated with result', {
+        executionId,
+        status,
+        hasOutput: !!outputData,
+        hasError: !!errorMessage,
+      });
+
+      // Emit WebSocket events for completion
+      if (status === ExecutionStatus.SUCCESS) {
+        await this.emitExecutionEvent(execution, 'completed');
+      } else if (status === ExecutionStatus.FAILED) {
+        await this.emitExecutionEvent(execution, 'failed');
+      }
+
+      return execution;
+    } catch (error) {
+      logger.error('Failed to update execution with result', {
         executionId,
         status,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -215,6 +396,9 @@ export class ExecutionService {
       }
 
       const cancelledExecution = await executionRepository.cancel(executionId);
+
+      // Emit completion event for cancelled execution
+      await this.emitExecutionEvent(cancelledExecution, 'completed');
 
       logger.info('Execution cancelled', {
         executionId,
@@ -456,6 +640,76 @@ export class ExecutionService {
   }
 
   /**
+   * Stream execution logs in real-time
+   */
+  async streamExecutionLogs(executionId: string, userId: string, message: string, level: 'info' | 'warn' | 'error' | 'debug' = 'info', data?: any): Promise<void> {
+    try {
+      // Verify user has access to this execution
+      const execution = await this.getExecution(executionId, userId);
+
+      // Emit log event via WebSocket
+      webSocketService.emitExecutionLog(userId, {
+        executionId,
+        timestamp: new Date(),
+        level,
+        message,
+        data
+      });
+
+      logger.debug('Execution log streamed', {
+        executionId,
+        userId,
+        level,
+        message: message.substring(0, 100) // Truncate for logging
+      });
+    } catch (error) {
+      logger.error('Failed to stream execution log', {
+        executionId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
+   * Update execution progress with real-time updates
+   */
+  async updateExecutionProgress(executionId: string, userId: string, progress: number, currentStep?: string, message?: string): Promise<void> {
+    try {
+      // Verify user has access to this execution
+      await this.getExecution(executionId, userId);
+
+      // Emit progress event via WebSocket
+      webSocketService.emitExecutionProgress(userId, {
+        executionId,
+        progress: Math.max(0, Math.min(100, progress)), // Clamp between 0-100
+        currentStep,
+        message
+      });
+
+      // Also emit as a log entry
+      await this.streamExecutionLogs(executionId, userId, message || `Progress: ${progress}%`, 'info', {
+        progress,
+        currentStep
+      });
+
+      logger.debug('Execution progress updated', {
+        executionId,
+        userId,
+        progress,
+        currentStep
+      });
+    } catch (error) {
+      logger.error('Failed to update execution progress', {
+        executionId,
+        userId,
+        progress,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  /**
    * Delete execution (soft delete by updating status)
    */
   async deleteExecution(executionId: string, userId: string): Promise<void> {
@@ -506,12 +760,25 @@ export class ExecutionService {
 
       const newStatus = status === 'success' ? ExecutionStatus.SUCCESS : ExecutionStatus.FAILED;
       
-      await this.updateExecutionStatus(
+      const updatedExecution = await this.updateExecutionStatus(
         executionId,
         newStatus,
         error,
         data
       );
+
+      // Emit additional log for webhook callback
+      webSocketService.emitExecutionLog(updatedExecution.userId, {
+        executionId,
+        timestamp: new Date(),
+        level: 'info',
+        message: 'Received webhook callback from n8n',
+        data: {
+          status: newStatus,
+          hasData: !!data,
+          hasError: !!error
+        }
+      });
 
       logger.info('Webhook callback processed', {
         executionId,

@@ -75,6 +75,10 @@ router.use('/workflows', workflowRoutes);
 import executionRoutes from './routes/execution.routes';
 router.use('/executions', executionRoutes);
 
+// Webhook routes (public - no authentication required)
+import webhookRoutes from './routes/webhook.routes';
+router.use('/webhooks', webhookRoutes);
+
 // 404 handler
 router.use(notFound);
 

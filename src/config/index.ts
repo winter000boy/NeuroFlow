@@ -27,6 +27,7 @@ export const AUTH_CONFIG = {
 export const N8N_CONFIG = {
   baseUrl: process.env.N8N_BASE_URL || 'http://localhost:5678',
   apiKey: process.env.N8N_API_KEY || '',
+  webhookSecret: process.env.N8N_WEBHOOK_SECRET || '',
 };
 
 export const LOG_CONFIG = {
