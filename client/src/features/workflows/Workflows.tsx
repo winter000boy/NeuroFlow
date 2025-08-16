@@ -1,27 +1,92 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Workflow } from '../../types';
+import { WorkflowList, WorkflowForm, WorkflowDetail } from './components';
+import Modal from '../../components/common/Modal';
+
+type ViewMode = 'list' | 'detail' | 'create' | 'edit';
 
 const Workflows: React.FC = () => {
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Workflows</h1>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-          Create Workflow
-        </button>
-      </div>
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(
+    null
+  );
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
 
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Your Workflows</h3>
-        </div>
-        <div className="p-6">
-          <div className="text-center text-gray-500">
-            <p>
-              No workflows found. Create your first workflow to get started.
-            </p>
-          </div>
-        </div>
-      </div>
+  const handleWorkflowSelect = (workflow: Workflow) => {
+    setSelectedWorkflow(workflow);
+    setViewMode('detail');
+  };
+
+  const handleWorkflowEdit = (workflow: Workflow) => {
+    setEditingWorkflow(workflow);
+    setShowFormModal(true);
+  };
+
+  const handleCreateNew = () => {
+    setEditingWorkflow(null);
+    setShowFormModal(true);
+  };
+
+  const handleFormSave = (workflow: Workflow) => {
+    setShowFormModal(false);
+    setEditingWorkflow(null);
+    // If we're in detail view and editing the same workflow, update it
+    if (selectedWorkflow && selectedWorkflow.id === workflow.id) {
+      setSelectedWorkflow(workflow);
+    }
+    // If we created a new workflow, show its detail
+    if (!editingWorkflow) {
+      setSelectedWorkflow(workflow);
+      setViewMode('detail');
+    }
+  };
+
+  const handleFormCancel = () => {
+    setShowFormModal(false);
+    setEditingWorkflow(null);
+  };
+
+  const handleBackToList = () => {
+    setViewMode('list');
+    setSelectedWorkflow(null);
+  };
+
+  const renderContent = () => {
+    switch (viewMode) {
+      case 'detail':
+        return selectedWorkflow ? (
+          <WorkflowDetail
+            workflowId={selectedWorkflow.id}
+            onEdit={handleWorkflowEdit}
+            onBack={handleBackToList}
+          />
+        ) : null;
+
+      case 'list':
+      default:
+        return (
+          <WorkflowList
+            onWorkflowSelect={handleWorkflowSelect}
+            onWorkflowEdit={handleWorkflowEdit}
+            onCreateNew={handleCreateNew}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-6">
+      {renderContent()}
+
+      {/* Workflow Form Modal */}
+      <Modal isOpen={showFormModal} onClose={handleFormCancel} size="lg">
+        <WorkflowForm
+          workflow={editingWorkflow || undefined}
+          onSave={handleFormSave}
+          onCancel={handleFormCancel}
+        />
+      </Modal>
     </div>
   );
 };
